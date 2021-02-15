@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+ <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+ <title>multi party</title>
+</head>
+<body>
+    <button type="button" id="connButton">Connect</button>
+    <button type="button" id="hangButton">Hang Up</button>
+    <input type="text" id="text-for-send"></input>
+    <input type="text" id="text-for-recv"></input>
+    <button type="button" id="sendButton">data send</button>
+</body>
+
+<script type="module" crossorigin="anonymous">
+
+import webrtc_dc from './core/webrtc_dc.js';
+import Websock from "./core/websock.js"; // WebSock Object
+
+let options = { roomid: 'myTestRoom',
+                iceServers: [{urls: "stun:stun.l.google.com:19302"},
+                             {urls: "stun:stun1.l.google.com:19302"}]
+              };
+
+var DataCh = new webrtc_dc('192.168.11.9:3002', options, onDataChannel);
+var _vncsock = null;
+var _wsProtocols = [];
+
+document.getElementById('connButton').onclick = () => {
+    DataCh.initiator = true;
+    if (!DataCh) {
+      console.warn('NOT READY to connect');
+    }
+    else if (! DataCh.canConnectMore()) {
+      console.log('TOO MANY connections');
+    }
+    else {
+      callMe();
+    }
+};
+
+document.getElementById('hangButton').onclick = () => {
+    DataCh.emitRoom({ type: 'bye' });  
+    DataCh.stopAllConnection();
+}
+
+_vncsock = new Websock();
+_vncsock.on('message', () => {
+    if (DataCh) {
+        if (_vncsock._rQlen > 0) {
+            DataCh.dataChannel.send(_vncsock._rQ.buffer.slice(0, _vncsock._rQlen));
+            //console.log(`Send Message(${_vncsock._rQlen}): ${_vncsock._rQ.buffer} `);
+            _vncsock._rQlen = 0;
+            _vncsock._rQi = 0;
+        }
+    }
+});
+_vncsock.on('open', () => {
+});
+_vncsock.on('close', (e) => {
+    console.log('VNC connection closed.');
+});
+_vncsock.on('error', (e) => {
+    console.log('VNC connection error is occurred.',e);
+});    
+
+function callMe() {
+    DataCh.emitRoom({type: 'call me'});
+}
+
+function onDataChannel(channel){
+    channel.onerror = (error) => {
+        console.log("Data Channel Error:", error);
+    };
+    channel.onmessage = (event) => {
+        //console.log("Got Data Channel Message:", event.data);
+        //document.getElementById('text-for-recv').value = event.data;
+        if (_vncsock) {
+            //console.log("Send to VNC Host");
+            //_vncsock.send(event.data);
+            _vncsock.send(new Uint8Array(event.data));
+        }
+    };
+    channel.onopen =  async () => {
+        console.log("open data channel.");
+        _vncsock.open('wss://192.168.11.9:6080/websockify', _wsProtocols);
+    };
+    channel.onclose = () => {
+        console.log("The Data Channel is Closed");
+    };
+}
+
+document.getElementById('sendButton').onclick = () => {
+    if (DataCh) {
+        var dcsend = document.getElementById('text-for-send').value;
+        console.log('send data :'+dcsend);
+        DataCh.dataChannel.send(dcsend);
+    }
+}
+
+</script>
+</html>

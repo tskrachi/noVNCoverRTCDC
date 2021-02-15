@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+ <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+ <title>multi party</title>
+</head>
+<body>
+    <button type="button" id="connButton">Connect</button>
+    <button type="button" id="hangButton">Hang Up</button>
+    <input type="text" id="text-for-send"></input>
+    <input type="text" id="text-for-recv"></input>
+    <button type="button" id="sendButton">data send</button>
+</body>
+<script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
+
+<script type="module" crossorigin="anonymous">
+
+import webrtc_dc from './core/webrtc_dc.js';
+
+var DataCh = new webrtc_dc('192.168.11.9', 3002, onDataChannel);
+
+document.getElementById('connButton').onclick = function() {
+    DataCh.initiator = true;
+    if (!DataCh) {
+      console.warn('NOT READY to connect');
+    }
+    else if (! DataCh.canConnectMore()) {
+      console.log('TOO MANY connections');
+    }
+    else {
+      callMe();
+    }
+};
+
+document.getElementById('hangButton').onclick = function() {
+    DataCh.emitRoom({ type: 'bye' });  
+    DataCh.stopAllConnection();
+}
+
+function callMe() {
+    DataCh.emitRoom({type: 'call me'});
+}
+
+function onDataChannel(channel){
+    channel.onerror = function (error) {
+        console.log("Data Channel Error:", error);
+    };
+    channel.onmessage = function (event) {
+        console.log("Got Data Channel Message:", event.data);
+        document.getElementById('text-for-recv').value = event.data;
+    };
+    channel.onopen = function () {
+        console.log("open data channel.");
+    };
+    channel.onclose = function () {
+        console.log("The Data Channel is Closed");
+    };
+}
+
+document.getElementById('sendButton').onclick = function() {
+    if (DataCh) {
+        var dcsend = document.getElementById('text-for-send').value;
+        console.log('send data :'+dcsend);
+        DataCh.dataChannel.send(dcsend);
+    }
+}
+
+</script>
+</html>
